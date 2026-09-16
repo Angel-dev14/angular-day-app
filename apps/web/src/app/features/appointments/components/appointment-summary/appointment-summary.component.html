@@ -1,0 +1,12 @@
+<section class="appointment-card" aria-labelledby="appointment-heading">
+  <div class="date-tile" aria-hidden="true">
+    <span>{{ appointment().day.slice(0, 3) }}</span>
+    <strong>{{ appointment().time }}</strong>
+  </div>
+  <div class="details">
+    <div class="eyebrow">Upcoming appointment</div>
+    <h2 id="appointment-heading">{{ appointment().patientName }}</h2>
+    <p>{{ appointment().day }} · {{ appointment().time }}</p>
+  </div>
+  <span class="status"><i></i> Confirmed</span>
+</section>

@@ -1,0 +1,22 @@
+{
+  "name": "angular-day-agentic-demo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,agent -c cyan,magenta \"npm run start -w web\" \"npm run dev -w @angular-day/agent\"",
+    "build": "npm run build -w @angular-day/contracts && npm run build -w @angular-day/agent && npm run build -w web",
+    "test": "npm run test -w @angular-day/agent && npm run test -w web -- --watch=false",
+    "start": "npm run dev",
+    "reset-demo": "curl -s -X POST http://localhost:3000/api/reset"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

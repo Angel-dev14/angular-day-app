@@ -1,0 +1,42 @@
+<section class="details-card" aria-labelledby="details-heading">
+  <header>
+    <div>
+      <span class="eyebrow">Loaded by agent tool</span>
+      <h2 id="details-heading">Appointment details</h2>
+    </div>
+    <span class="tool-badge"><i></i> getAppointmentDetails</span>
+  </header>
+
+  <dl>
+    <div>
+      <dt>Scheduled date</dt>
+      <dd>{{ details().day }}</dd>
+      <small>Appointment day</small>
+    </div>
+    <div>
+      <dt>Scheduled time</dt>
+      <dd>{{ details().time }}</dd>
+      <small>Local clinic time</small>
+    </div>
+    <div>
+      <dt>Clinician</dt>
+      <dd>{{ details().clinician }}</dd>
+      <small>{{ details().specialty }}</small>
+    </div>
+    <div>
+      <dt>Visit</dt>
+      <dd>{{ details().visitType }}</dd>
+      <small>{{ details().durationMinutes }} minutes</small>
+    </div>
+    <div>
+      <dt>Location</dt>
+      <dd>{{ details().location }}</dd>
+      <small>In-person appointment</small>
+    </div>
+    <div>
+      <dt>Reason</dt>
+      <dd>{{ details().reason }}</dd>
+      <small>Patient record</small>
+    </div>
+  </dl>
+</section>

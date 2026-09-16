@@ -1,0 +1,19 @@
+<section class="activity-card" aria-labelledby="activity-heading">
+  <header>
+    <div><span class="pulse"></span><h2 id="activity-heading">Agent activity</h2></div>
+    <span class="mode" [class.live]="mode() === 'live'">{{ mode() }}</span>
+  </header>
+  <div class="stream-meta"><span>AG-UI event stream</span><code>{{ lastEvent() }}</code><b>{{ eventCount() }}</b></div>
+  <ol>
+    @for (item of activity(); track item.id) {
+      <li [class]="item.status">
+        <span class="marker" aria-hidden="true">
+          @if (item.status === 'complete') { ✓ } @else if (item.status === 'error') { ! } @else { ● }
+        </span>
+        <span>{{ item.label }}</span>
+      </li>
+    } @empty {
+      <li class="empty"><span class="marker">○</span><span>Ready for a goal</span></li>
+    }
+  </ol>
+</section>

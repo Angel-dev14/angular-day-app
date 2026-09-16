@@ -1,0 +1,47 @@
+<div class="page-shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Clarity Health home"><span>C</span> Clarity<span class="brand-light">Health</span></a>
+    <div class="talk-label"><span>Angular Day</span><b>Beyond the Chatbox</b></div>
+    <button class="reset" type="button" (click)="agent.reset()">↻ Reset demo</button>
+  </header>
+
+  <main>
+    <section class="workspace">
+      <div class="intro">
+        <div><span class="section-label">Appointments</span><h1>Good morning, Angel.</h1><p>Here’s today’s care schedule.</p></div>
+        <div class="date"><b>18</b><span>September<br />Friday</span></div>
+      </div>
+
+      <app-appointment-summary [appointment]="agent.state().appointment" />
+        @if (agent.state().appointmentDetails; as details) {
+        <app-appointment-details [details]="details" />
+      }
+
+      <div class="interaction-zone">
+        @if (agent.state().interaction; as interaction) {
+          <app-trusted-interaction-outlet [interaction]="interaction" (action)="agent.sendAction($event)" />
+        } @else if (agent.error()) {
+          <div class="error-card"><span>!</span><div><b>The workflow needs attention</b><p>{{ agent.error() }}</p></div></div>
+        } @else if (agent.isRunning()) {
+          <div class="working-card"><span></span><div><b>Agent is coordinating the change</b><p>Structured events are updating this workspace in real time.</p></div></div>
+        } @else if (agent.state().phase === 'details-shown') {
+          <div class="details-ready-card"><span>✓</span><div><b>Appointment details ready</b><p>You can now ask the assistant to reschedule this appointment.</p></div></div>
+        } @else if (agent.state().phase === 'complete') {
+          <div class="success-card"><span>✓</span><div><b>Appointment updated</b><p>The application state and trusted Angular UI are now in sync.</p></div></div>
+        } @else {
+          <div class="empty-zone"><span>✦</span><div><b>Agent-ready workspace</b><p>The next interaction will appear here—not inside the chatbox.</p></div></div>
+        }
+      </div>
+    </section>
+
+    <aside>
+      <app-assistant-panel />
+      <app-agent-activity
+        [activity]="agent.state().activity"
+        [mode]="agent.state().mode"
+        [lastEvent]="agent.lastEvent()"
+        [eventCount]="agent.eventCount()"
+      />
+    </aside>
+  </main>
+</div>

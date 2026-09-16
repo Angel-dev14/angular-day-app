@@ -1,0 +1,14 @@
+:host { display: block; margin-top: 14px; animation: reveal .28s ease-out; }
+.details-card { padding: 19px 21px; background: rgba(255,255,255,.7); border: 1px solid var(--border); border-radius: 18px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.eyebrow { color: #4c8f81; font-size: 9px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+h2 { margin: 3px 0 0; font-size: 16px; letter-spacing: -.025em; }
+.tool-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; color: #47716a; background: #edf5f0; border-radius: 99px; font-family: var(--mono); font-size: 9px; }
+.tool-badge i { width: 6px; height: 6px; background: #48a47a; border-radius: 50%; }
+dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; background: var(--border); border: 1px solid var(--border); border-radius: 12px; }
+dl div { min-width: 0; padding: 13px 15px; background: #fbfcf8; }
+dt { margin-bottom: 4px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+dd { overflow: hidden; margin: 0; color: var(--ink); font-size: 13px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
+@keyframes reveal { from { opacity: 0; transform: translateY(-5px); } }
+@media (max-width: 620px) { header { align-items: start; flex-direction: column; } dl { grid-template-columns: 1fr; } }

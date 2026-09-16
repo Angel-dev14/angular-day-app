@@ -1,0 +1,23 @@
+<section class="assistant" aria-labelledby="assistant-heading">
+  <header><div class="agent-mark">A</div><div><h2 id="assistant-heading">Scheduling assistant</h2><p>Connected with AG-UI</p></div></header>
+  <div class="conversation" aria-live="polite">
+    @if (agent.userText()) {
+      <div class="message user"><span>You</span><p>{{ agent.userText() }}</p></div>
+    } @else {
+      <div class="welcome"><span>✦</span><p>I can help coordinate appointment changes while you stay in control.</p></div>
+    }
+    @if (agent.assistantText()) {
+      <div class="message agent"><span>Assistant</span><p>{{ agent.assistantText() }}</p></div>
+    }
+    @if (agent.error()) {
+      <div class="error" role="alert"><b>Couldn’t complete the run</b><span>{{ agent.error() }}</span></div>
+    }
+  </div>
+  <form (submit)="$event.preventDefault(); send()">
+    <label for="agent-message">Ask the agent</label>
+    <textarea id="agent-message" rows="3" [formField]="messageForm.message"></textarea>
+    <button type="submit" [disabled]="agent.isRunning() || messageForm().invalid() || !agent.canStart()">
+      @if (agent.isRunning()) { <span class="spinner"></span> Working… } @else { Run agent <span>↑</span> }
+    </button>
+  </form>
+</section>

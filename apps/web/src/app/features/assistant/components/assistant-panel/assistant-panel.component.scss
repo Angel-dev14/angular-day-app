@@ -1,0 +1,25 @@
+:host { display: block; }
+.assistant { display: flex; flex-direction: column; min-height: 430px; overflow: hidden; background: rgba(255,255,255,.9); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); }
+header { display: flex; align-items: center; gap: 11px; padding: 17px 18px; border-bottom: 1px solid var(--border); }
+.agent-mark { width: 35px; height: 35px; display: grid; place-items: center; color: var(--ink); background: #dcff7c; border-radius: 11px; font-family: var(--mono); font-weight: 900; }
+h2 { margin: 0; font-size: 14px; }
+header p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+.conversation { display: flex; flex: 1; flex-direction: column; gap: 13px; padding: 18px; }
+.welcome { margin: auto 0; padding: 16px; color: var(--muted); background: var(--surface-soft); border-radius: 13px; font-size: 13px; line-height: 1.5; }
+.welcome span { color: #4f9e8d; }
+.welcome p { margin: 7px 0 0; }
+.message { max-width: 88%; }
+.message span { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.message p { margin: 5px 0 0; padding: 11px 13px; border-radius: 13px; font-size: 13px; line-height: 1.5; }
+.user { align-self: flex-end; text-align: right; }
+.user p { color: white; background: var(--ink); border-bottom-right-radius: 4px; }
+.agent p { background: var(--surface-soft); border-bottom-left-radius: 4px; }
+.error { display: grid; gap: 4px; padding: 11px; color: #8b2923; background: #fff0ee; border-radius: 10px; font-size: 11px; }
+form { display: grid; gap: 8px; padding: 14px; border-top: 1px solid var(--border); }
+label { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+textarea { width: 100%; resize: none; padding: 11px; border: 1px solid var(--border); border-radius: 11px; background: #fafaf7; color: var(--ink); font: 13px/1.45 var(--sans); box-sizing: border-box; }
+textarea:focus { outline: 2px solid #99b957; outline-offset: 1px; }
+button { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 11px; color: white; background: var(--ink); border: 0; border-radius: 10px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+.spinner { width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,12 @@
+<section class="interaction-card" aria-labelledby="slot-heading">
+  <div class="interaction-kicker"><span>Agent request</span><b>Trusted Angular UI</b></div>
+  <h2 id="slot-heading">{{ data().prompt }}</h2>
+  <p>The agent found these times. You stay in control of the final choice.</p>
+  <div class="slots" role="list" aria-label="Available appointment times">
+    @for (slot of data().slots; track slot.id) {
+      <button type="button" (click)="choose(slot.id)">
+        <span>{{ slot.day }}</span><strong>{{ slot.time }}</strong><i aria-hidden="true">→</i>
+      </button>
+    }
+  </div>
+</section>
