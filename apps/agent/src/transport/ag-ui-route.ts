@@ -18,7 +18,6 @@ agUiRouter.post('/agent', async (request, response) => {
 
   try {
     // Reject malformed client input before it can reach the workflow or tools.
-    // console.log('Received agent input:', request.body);
     const input = RunAgentInputSchema.parse(request.body);
     for await (const event of runWorkflow(input)) {
       response.write(encoder.encode(event));

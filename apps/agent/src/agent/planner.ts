@@ -132,7 +132,6 @@ export async function planGoal(goal: string): Promise<{
       const plan = provider === 'openai'
         ? await planWithOpenAi(goal)
         : await planWithGemini(goal);
-      console.log(plan, 'PLAN');
       return { plan, mode: 'live' };
     } catch (error) {
       lastError = error;
