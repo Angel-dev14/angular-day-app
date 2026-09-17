@@ -46,6 +46,16 @@ describe('appointment workflow', () => {
       'getAppointmentDetails',
       'getAvailableSlots',
     ]);
+    expect([...new Set(snapshots.map((event) =>
+      demoStateSchema.parse(event['snapshot']).phase,
+    ))]).toEqual([
+      'planning',
+      'searching-patient',
+      'loading-appointments',
+      'loading-appointment-details',
+      'loading-slots',
+      'awaiting-slot',
+    ]);
     if (finalState.interaction?.interaction !== 'appointment-slot-picker') {
       throw new Error('Expected a slot-picker interaction.');
     }

@@ -66,7 +66,6 @@ export class AgentClient {
       if (event.type === EventType.STATE_SNAPSHOT) {
         const parsed = demoStateSchema.safeParse(event['snapshot']);
         if (parsed.success) {
-          console.log(parsed.data);
           this.stateSignal.set(parsed.data);
         } else {
           this.errorSignal.set('The agent sent state that the trusted UI could not validate.');
@@ -120,7 +119,7 @@ export class AgentClient {
     }
   }
 
-  private async   run(forwardedProps?: Record<string, unknown>): Promise<void> {
+  private async run(forwardedProps?: Record<string, unknown>): Promise<void> {
     this.runningSignal.set(true);
     try {
       await this.agent.runAgent({ forwardedProps }, this.subscriber);

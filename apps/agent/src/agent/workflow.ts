@@ -2,18 +2,30 @@ import {
   clientActionSchema,
   demoStateSchema,
   type ActivityItem,
-  type DemoState
+  type AppointmentDetails,
+  type ClientAction,
+  type DemoState,
+  type Patient,
 } from '@angular-day/contracts';
 import {
   EventType,
   type BaseEvent,
   type Message,
-  type RunAgentInput
+  type RunAgentInput,
 } from '@ag-ui/core';
 import { env } from '../config/env.js';
 import { mockStore } from '../data/mock-store.js';
 import { appointmentTools, type AppointmentToolName } from '../tools/appointment-tools.js';
-import { planGoal } from './planner.js';
+import { planGoal, type AppointmentPlan } from './planner.js';
+
+type RunIdentity = { threadId: string; runId: string };
+type WorkflowMode = DemoState['mode'];
+type RunStatus =
+  | 'awaiting-confirmation'
+  | 'awaiting-slot'
+  | 'cancelled'
+  | 'complete'
+  | 'details-shown';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, env.stepDelayMs));
 
@@ -32,7 +44,7 @@ function initialState(): DemoState {
     activity: [],
     phase: 'idle',
     mode: 'demo',
-    error: null
+    error: null,
   };
 }
 
@@ -45,8 +57,22 @@ function activity(id: string, label: string, status: ActivityItem['status']): Ac
   return { id, label, status };
 }
 
+function startActivity(state: DemoState, id: string, label = id): void {
+  state.activity.push(activity(id, label, 'running'));
+}
+
+function completeActivity(state: DemoState, id: string, label?: string): void {
+  state.activity = state.activity.map((item) =>
+    item.id === id ? activity(id, label ?? item.label, 'complete') : item,
+  );
+}
+
 function stateEvent(state: DemoState): BaseEvent {
-  return { type: EventType.STATE_SNAPSHOT, snapshot: state };
+  return { type: EventType.STATE_SNAPSHOT, snapshot: structuredClone(state) };
+}
+
+function runFinishedEvent(run: RunIdentity, status: RunStatus): BaseEvent {
+  return { type: EventType.RUN_FINISHED, ...run, result: { status } };
 }
 
 function textEvents(text: string): BaseEvent[] {
@@ -54,14 +80,14 @@ function textEvents(text: string): BaseEvent[] {
   return [
     { type: EventType.TEXT_MESSAGE_START, messageId, role: 'assistant' },
     { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: text },
-    { type: EventType.TEXT_MESSAGE_END, messageId }
+    { type: EventType.TEXT_MESSAGE_END, messageId },
   ];
 }
 
 async function* callTool<T>(
   name: AppointmentToolName,
   args: Record<string, string>,
-  execute: () => T
+  execute: () => T,
 ): AsyncGenerator<BaseEvent, T> {
   const toolCallId = crypto.randomUUID();
   yield { type: EventType.STEP_STARTED, stepName: name };
@@ -75,34 +101,126 @@ async function* callTool<T>(
     messageId: crypto.randomUUID(),
     toolCallId,
     content: JSON.stringify(result),
-    role: 'tool'
+    role: 'tool',
   };
   yield { type: EventType.STEP_FINISHED, stepName: name };
   return result;
 }
 
-export async function* runWorkflow(
-  input: RunAgentInput,
-  goalPlanner: typeof planGoal = planGoal
+async function* discoverAppointment(
+  state: DemoState,
+  patientQuery: string,
+): AsyncGenerator<BaseEvent, { patient: Patient; details: AppointmentDetails }> {
+  state.phase = 'searching-patient';
+  state.activity = [];
+  startActivity(state, 'searchPatient');
+  yield stateEvent(state);
+
+  const patient = yield* callTool('searchPatient', { name: patientQuery }, () =>
+    appointmentTools.searchPatient(patientQuery),
+  );
+  if (!patient) throw new Error(`No patient matching “${patientQuery}” was found.`);
+
+  state.patient = patient;
+  completeActivity(state, 'searchPatient');
+  yield stateEvent(state);
+
+  state.phase = 'loading-appointments';
+  startActivity(state, 'getAppointments');
+  yield stateEvent(state);
+
+  const appointments = yield* callTool('getAppointments', { patientId: patient.id }, () =>
+    appointmentTools.getAppointments(patient.id),
+  );
+  if (!appointments[0]) throw new Error(`${patient.name} has no appointment to show.`);
+
+  state.appointment = appointments[0];
+  completeActivity(state, 'getAppointments');
+  yield stateEvent(state);
+
+  state.phase = 'loading-appointment-details';
+  startActivity(state, 'getAppointmentDetails');
+  yield stateEvent(state);
+
+  const details = yield* callTool(
+    'getAppointmentDetails',
+    { appointmentId: state.appointment.id },
+    () => appointmentTools.getAppointmentDetails(state.appointment.id),
+  );
+  state.appointmentDetails = details;
+  completeActivity(state, 'getAppointmentDetails');
+  yield stateEvent(state);
+
+  return { patient, details };
+}
+
+async function* handleConversationIntent(
+  state: DemoState,
+  plan: AppointmentPlan,
+  run: RunIdentity,
 ): AsyncGenerator<BaseEvent> {
-  const runId = input.runId || crypto.randomUUID();
-  yield { type: EventType.RUN_STARTED, threadId: input.threadId, runId };
+  // Keep the workspace neutral: `complete` is reserved for a finished reschedule.
+  state.phase = 'idle';
+  yield stateEvent(state);
+  // Conversational model output is display-only and cannot select trusted UI components.
+  yield* textEvents(plan.reply || 'Hi! How can I help?');
+  yield runFinishedEvent(run, 'complete');
+}
 
-  let state = stateFromInput(input);
-  const actionResult = clientActionSchema.safeParse(input.forwardedProps?.action);
+async function* handleDetailsIntent(
+  state: DemoState,
+  plan: AppointmentPlan,
+  run: RunIdentity,
+): AsyncGenerator<BaseEvent> {
+  const { patient, details } = yield* discoverAppointment(state, plan.patientQuery);
+  state.phase = 'details-shown';
+  state.interaction = null;
+  yield stateEvent(state);
+  yield* textEvents(`${patient.name}'s appointment is ${details.day} at ${details.time}.`);
+  yield runFinishedEvent(run, 'details-shown');
+}
 
-  if (actionResult.success) {
-    const action = actionResult.data;
-    state.mode = input.forwardedProps?.mode ?? 'demo';
+async function* handleRescheduleIntent(
+  state: DemoState,
+  plan: AppointmentPlan,
+  run: RunIdentity,
+): AsyncGenerator<BaseEvent> {
+  yield* discoverAppointment(state, plan.patientQuery);
 
-    if (action.type === 'slot-selected') {
+  state.phase = 'loading-slots';
+  startActivity(state, 'getAvailableSlots');
+  yield stateEvent(state);
+
+  const slots = yield* callTool('getAvailableSlots', { window: plan.timeWindow }, () =>
+    appointmentTools.getAvailableSlots(plan.timeWindow),
+  );
+  state.slots = slots;
+  completeActivity(state, 'getAvailableSlots');
+  state.activity.push(activity('waiting-selection', 'Waiting for user selection', 'waiting'));
+  state.phase = 'awaiting-slot';
+  state.interaction = {
+    interaction: 'appointment-slot-picker',
+    data: { prompt: 'Choose a Monday afternoon time', slots },
+  };
+  yield stateEvent(state);
+  yield runFinishedEvent(run, 'awaiting-slot');
+}
+
+async function* handleClientAction(
+  state: DemoState,
+  action: ClientAction,
+  mode: WorkflowMode,
+  run: RunIdentity,
+): AsyncGenerator<BaseEvent> {
+  state.mode = mode;
+
+  switch (action.type) {
+    case 'slot-selected': {
       const availableSlots = state.slots.length
         ? state.slots
         : appointmentTools.getAvailableSlots('Monday afternoon');
       const slot = availableSlots.find((candidate) => candidate.id === action.slotId);
-      if (!slot) {
-        throw new Error('The selected slot is no longer available.');
-      }
+      if (!slot) throw new Error('The selected slot is no longer available.');
 
       state.phase = 'awaiting-confirmation';
       state.slots = availableSlots;
@@ -115,150 +233,89 @@ export async function* runWorkflow(
           fromDay: state.appointment.day,
           fromTime: state.appointment.time,
           toDay: slot.day,
-          toTime: slot.time
-        }
+          toTime: slot.time,
+        },
       };
       state.activity = state.activity
         .filter((item) => item.id !== 'waiting-confirmation')
-        .map((item) => item.id === 'waiting-selection' ? activity(item.id, `Selected ${slot.time}`, 'complete') : item);
+        .map((item) => item.id === 'waiting-selection'
+          ? activity(item.id, `Selected ${slot.time}`, 'complete')
+          : item);
       state.activity.push(activity('waiting-confirmation', 'Waiting for confirmation', 'waiting'));
-      // Human-in-the-loop pause: publish trusted UI state, finish this HTTP run,
-      // and resume with a typed client action in a fresh AG-UI run.
       yield stateEvent(state);
-        yield {
-          type: EventType.RUN_FINISHED,
-          threadId: input.threadId,
-          runId,
-          result: { status: 'awaiting-confirmation' }
-        };
+      yield runFinishedEvent(run, 'awaiting-confirmation');
       return;
     }
 
-    if (action.type === 'reschedule-cancelled') {
-      state = initialState();
-      yield stateEvent(state);
+    case 'reschedule-cancelled': {
+      const resetState = initialState();
+      resetState.mode = mode;
+      yield stateEvent(resetState);
       yield* textEvents('No changes were made.');
-      yield { type: EventType.RUN_FINISHED, threadId: input.threadId, runId, result: { status: 'cancelled' } };
+      yield runFinishedEvent(run, 'cancelled');
       return;
     }
 
-    state.phase = 'working';
-    state.activity = state.activity
-      .filter((item) => item.id !== 'rescheduleAppointment')
-      .map((item) => item.id === 'waiting-confirmation' ? activity(item.id, 'Confirmed by user', 'complete') : item);
-    state.activity.push(activity('rescheduleAppointment', 'rescheduleAppointment', 'running'));
-    yield stateEvent(state);
-    const appointment = yield* callTool(
-      'rescheduleAppointment',
-      { appointmentId: action.appointmentId, slotId: action.slotId },
-      () => appointmentTools.rescheduleAppointment(action.appointmentId, action.slotId)
-    );
-    state = {
-      ...state,
-      appointment,
-      appointmentDetails: state.appointmentDetails
+    case 'reschedule-confirmed': {
+      state.phase = 'rescheduling';
+      state.activity = state.activity
+        .filter((item) => item.id !== 'rescheduleAppointment')
+        .map((item) => item.id === 'waiting-confirmation'
+          ? activity(item.id, 'Confirmed by user', 'complete')
+          : item);
+      startActivity(state, 'rescheduleAppointment');
+      yield stateEvent(state);
+
+      const appointment = yield* callTool(
+        'rescheduleAppointment',
+        { appointmentId: action.appointmentId, slotId: action.slotId },
+        () => appointmentTools.rescheduleAppointment(action.appointmentId, action.slotId),
+      );
+      state.appointment = appointment;
+      state.appointmentDetails = state.appointmentDetails
         ? { ...state.appointmentDetails, day: appointment.day, time: appointment.time }
-        : null,
-      interaction: null,
-      phase: 'complete',
-      activity: state.activity.map((item) =>
-        item.id === 'rescheduleAppointment' ? activity(item.id, item.label, 'complete') : item
-      )
-    };
-    yield stateEvent(state);
-    yield* textEvents(`Done, John's appointment is now Monday at ${appointment.time}.`);
-    yield { type: EventType.RUN_FINISHED, threadId: input.threadId, runId, result: { status: 'complete' } };
+        : null;
+      state.interaction = null;
+      state.phase = 'complete';
+      completeActivity(state, 'rescheduleAppointment');
+      yield stateEvent(state);
+      yield* textEvents(`Done, John's appointment is now Monday at ${appointment.time}.`);
+      yield runFinishedEvent(run, 'complete');
+    }
+  }
+}
+
+export async function* runWorkflow(
+  input: RunAgentInput,
+  goalPlanner: typeof planGoal = planGoal,
+): AsyncGenerator<BaseEvent> {
+  const run = { threadId: input.threadId, runId: input.runId || crypto.randomUUID() };
+  yield { type: EventType.RUN_STARTED, ...run };
+
+  const previousState = stateFromInput(input);
+  const actionResult = clientActionSchema.safeParse(input.forwardedProps?.action);
+  if (actionResult.success) {
+    const mode = input.forwardedProps?.mode ?? 'demo';
+    yield* handleClientAction(previousState, actionResult.data, mode, run);
     return;
   }
 
-  state = initialState();
-  state.phase = 'working';
+  const state = initialState();
+  state.phase = 'planning';
   yield stateEvent(state);
+
   const { plan, mode } = await goalPlanner(latestUserText(input.messages));
   state.mode = mode;
 
-  if (mode === 'live' && plan.intent === 'conversation') {
-    // Keep the workspace neutral: `complete` is reserved for a finished reschedule
-    // and causes Angular to show its "Appointment updated" success card.
-    state.phase = 'idle';
-    yield stateEvent(state);
-    // Conversational model output is display-only and cannot select trusted UI components.
-    yield* textEvents(plan.reply || 'Hi! How can I help?');
-    yield {
-      type: EventType.RUN_FINISHED,
-      threadId: input.threadId,
-      runId,
-      result: { status: 'complete' }
-    };
-    return;
+  // Intent routing is explicit: each plan enters one small, named workflow.
+  switch (plan.intent) {
+    case 'conversation':
+      yield* handleConversationIntent(state, plan, run);
+      return;
+    case 'show-appointment-details':
+      yield* handleDetailsIntent(state, plan, run);
+      return;
+    case 'reschedule-appointment':
+      yield* handleRescheduleIntent(state, plan, run);
   }
-
-  console.log(plan.intent, 'INTENT');
-
-  state.activity = [activity('searchPatient', 'searchPatient', 'running')];
-  yield stateEvent(state);
-  const patient = yield* callTool('searchPatient', { name: plan.patientQuery }, () =>
-    appointmentTools.searchPatient(plan.patientQuery)
-  );
-  if (!patient) {
-    throw new Error(`No patient matching “${plan.patientQuery}” was found.`);
-  }
-  state.patient = patient;
-  state.activity[0] = activity('searchPatient', 'searchPatient', 'complete');
-  yield stateEvent(state);
-
-  state.activity.push(activity('getAppointments', 'getAppointments', 'running'));
-  yield stateEvent(state);
-  const appointments = yield* callTool('getAppointments', { patientId: patient.id }, () =>
-    appointmentTools.getAppointments(patient.id)
-  );
-  if (!appointments[0]) {
-    throw new Error('John has no appointment to show.');
-  }
-  state.appointment = appointments[0];
-  state.activity[1] = activity('getAppointments', 'getAppointments', 'complete');
-  yield stateEvent(state);
-
-  state.activity.push(activity('getAppointmentDetails', 'getAppointmentDetails', 'running'));
-  yield stateEvent(state);
-  const appointmentDetails = yield* callTool(
-    'getAppointmentDetails',
-    { appointmentId: state.appointment.id },
-    () => appointmentTools.getAppointmentDetails(state.appointment.id)
-  );
-  state.appointmentDetails = appointmentDetails;
-  state.activity[2] = activity('getAppointmentDetails', 'getAppointmentDetails', 'complete');
-  yield stateEvent(state);
-
-  if (plan.intent === 'show-appointment-details') {
-    state.phase = 'details-shown';
-    state.interaction = null;
-    yield stateEvent(state);
-    yield* textEvents(
-      `${patient.name}'s appointment is ${appointmentDetails.day} at ${appointmentDetails.time}.`
-    );
-    yield {
-      type: EventType.RUN_FINISHED,
-      threadId: input.threadId,
-      runId,
-      result: { status: 'details-shown' }
-    };
-    return;
-  }
-
-  state.activity.push(activity('getAvailableSlots', 'getAvailableSlots', 'running'));
-  yield stateEvent(state);
-  const slots = yield* callTool('getAvailableSlots', { window: plan.timeWindow }, () =>
-    appointmentTools.getAvailableSlots(plan.timeWindow)
-  );
-  state.slots = slots;
-  state.activity[3] = activity('getAvailableSlots', 'getAvailableSlots', 'complete');
-  state.activity.push(activity('waiting-selection', 'Waiting for user selection', 'waiting'));
-  state.phase = 'awaiting-slot';
-  state.interaction = {
-    interaction: 'appointment-slot-picker',
-    data: { prompt: 'Choose a Monday afternoon time', slots }
-  };
-  yield stateEvent(state);
-  yield { type: EventType.RUN_FINISHED, threadId: input.threadId, runId, result: { status: 'awaiting-slot' } };
 }

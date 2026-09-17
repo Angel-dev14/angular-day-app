@@ -69,10 +69,15 @@ export const interactionSchema = z.discriminatedUnion('interaction', [
 
 export const workflowPhaseSchema = z.enum([
   'idle',
-  'working',
+  'planning',
+  'searching-patient',
+  'loading-appointments',
+  'loading-appointment-details',
+  'loading-slots',
   'details-shown',
   'awaiting-slot',
   'awaiting-confirmation',
+  'rescheduling',
   'complete',
   'error',
 ]);
